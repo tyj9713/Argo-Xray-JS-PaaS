@@ -7,10 +7,10 @@ WEB_USERNAME=${WEB_USERNAME:-'admin'}
 WEB_PASSWORD=${WEB_PASSWORD:-'password'}
 
 # 哪吒4个参数，ssl/tls 看是否需要，不需要的话可以留空，删除或在这4行最前面加 # 以注释
-NEZHA_SERVER="$NEZHA_SERVER"
-NEZHA_PORT="$NEZHA_PORT"
-NEZHA_KEY="$NEZHA_KEY"
-NEZHA_TLS="$NEZHA_TLS"
+NEZHA_SERVER="ip-tz.971314.xyz"
+NEZHA_PORT="15555"
+NEZHA_KEY="7JQFyDBT8XEc6krnqb"
+# NEZHA_TLS="$NEZHA_TLS"
 
 # Argo 固定域名隧道的两个参数,这个可以填 Json 内容或 Token 内容，不需要的话可以留空，删除或在这三行最前面加 # 以注释
 ARGO_AUTH=''
