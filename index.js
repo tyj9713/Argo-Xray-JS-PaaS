@@ -18,6 +18,44 @@ app.use((req, res, next) => {
   return res.status(401).send("Access denied");
 });
 
+/ 增加路由以提供HTML页面
+app.use(express.static('public'));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 增加控制Nezha的路由
+app.post('/start-nezha', (req, res) => {
+  exec("bash nezha.sh", (err, stdout, stderr) => {
+    if (err) {
+      res.status(500).send({ message: "启动哪吒客户端失败", error: err });
+    } else {
+      res.send({ message: "哪吒客户端启动成功" });
+    }
+  });
+});
+
+app.post('/restart-nezha', (req, res) => {
+  exec("pkill -9 nezha-agent && bash nezha.sh", (err, stdout, stderr) => {
+    if (err) {
+      res.status(500).send({ message: "重启哪吒客户端失败", error: err });
+    } else {
+      res.send({ message: "哪吒客户端重启成功" });
+    }
+  });
+});
+
+app.post('/stop-nezha', (req, res) => {
+  exec("pkill -9 nezha-agent", (err, stdout, stderr) => {
+    if (err) {
+      res.status(500).send({ message: "停止哪吒客户端失败", error: err });
+    } else {
+      res.send({ message: "哪吒客户端停止成功" });
+    }
+  });
+});
+
 // keepalive begin
 // 哪吒保活
 function keep_nezha_alive() {
