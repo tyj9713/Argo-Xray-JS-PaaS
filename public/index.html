@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nezha Control Panel</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding-top: 2rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Nezha Agent Status</h1>
+    <div id="nezha-status">Loading...</div>
+    <div class="my-3">
+      <button id="start-btn" class="btn btn-primary">Start Nezha</button>
+      <button id="restart-btn" class="btn btn-warning">Restart Nezha</button>
+      <button id="stop-btn" class="btn btn-danger">Stop Nezha</button>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JavaScript and Popper.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const startBtn = document.getElementById("start-btn");
+      const restartBtn = document.getElementById("restart-btn");
+      const stopBtn = document.getElementById("stop-btn");
+
+      startBtn.addEventListener("click", function() {
+        fetch('/start-nezha', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.message))
+          .catch(error => alert("启动失败: " + error));
+      });
+
+      restartBtn.addEventListener("click", function() {
+        fetch('/restart-nezha', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.message))
+          .catch(error => alert("重启失败: " + error));
+      });
+
+      stopBtn.addEventListener("click", function() {
+        fetch('/stop-nezha', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.message))
+          .catch(error => alert("停止失败: " + error));
+      });
+    });
+  </script>
+</body>
+</html>
