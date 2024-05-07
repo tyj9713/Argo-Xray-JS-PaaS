@@ -1,24 +1,9 @@
 const express = require("express");
 const app = express();
-const basicAuth = require("basic-auth");
-const os = require("os");
-var exec = require("child_process").exec;
+const path = require("path");
+const exec = require("child_process").exec;
 
-// 假设环境变量中已经设置了WEB_USERNAME和WEB_PASSWORD
-const username = process.env.WEB_USERNAME || "admin";
-const password = process.env.WEB_PASSWORD || "password";
-
-// 页面访问密码中间件
-app.use((req, res, next) => {
-  const user = basicAuth.parse(req);
-  if (user && user.name === username && user.pass === password) {
-    return next();
-  }
-  res.set("WWW-Authenticate", 'Basic realm="Node"');
-  return res.status(401).send("Access denied");
-});
-
-/ 增加路由以提供HTML页面
+// 增加路由以提供HTML页面
 app.use(express.static('public'));
 
 app.get('/', (req, res) => {
