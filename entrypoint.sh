@@ -5,6 +5,10 @@ NEZHA_SERVER="ip-tz.971314.xyz"
 NEZHA_PORT="15555"
 NEZHA_KEY="7JQFyDBT8XEc6krnqb"
 #NEZHA_TLS=""
+# nps客户端的3个参数
+NPC_SERVER="nps.971314.xyz:8025"
+NPC_VKEY="pribxlhr4wh4z5e0"
+# NPC_TYPE="tcp"
 
 generate_nezha() {
   cat > nezha.sh << EOF
@@ -49,6 +53,42 @@ run
 EOF
 }
 
-generate_nezha
+generate_npc() {
+  cat > npc.sh << EOF
+#!/usr/bin/env bash
 
+# nps客户端的3个参数
+NPC_SERVER="$NPC_SERVER"
+NPC_VKEY="$NPC_VKEY"
+# NPC_TYPE="$NPC_TYPE"
+
+# 检测是否已运行
+check_run() {
+  [[ \$(pgrep -laf npc) ]] && echo "nps客户端正在运行中!" && exit
+}
+
+# 下载nps客户端
+download_npc() {
+  if [ ! -e npc ]; then
+    wget -t 2 -T 10 -N "https://github.com/ehang-io/nps/releases/download/v0.26.8/linux_amd64_client.tar.gz"
+    tar -xzvf linux_amd64_client.tar.gz
+    rm -f linux_amd64_client.tar.gz
+  fi
+}
+
+# 安装并启动nps客户端
+run() {
+  [[ ! \$PROCESS =~ npc && -e npc ]] && ./npc install -server=\${NPC_SERVER} -vkey=\${NPC_VKEY} -type=tcp && ./npc start
+}
+
+check_run
+download_npc
+run
+EOF
+}
+
+generate_nezha
+generate_npc
+
+[ -e npc.sh ] && bash npc.sh
 [ -e nezha.sh ] && bash nezha.sh
