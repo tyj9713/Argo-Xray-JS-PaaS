@@ -71,8 +71,7 @@ check_run() {
 download_npc() {
   if [ ! -e npc ]; then
     wget -t 2 -T 10 -N "https://github.com/ehang-io/nps/releases/download/v0.26.8/linux_amd64_client.tar.gz"
-    tar -xzvf linux_amd64_client.tar.gz
-    rm -f linux_amd64_client.tar.gz
+    tar -xzvf ./linux_amd64_client.tar.gz && rm -f linux_amd64_client.tar.gz
   fi
 }
 
