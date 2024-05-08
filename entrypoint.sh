@@ -78,7 +78,7 @@ download_npc() {
 
 # 安装并启动nps客户端
 run() {
-  [[ ! \$PROCESS =~ npc && -e npc ]] && ./npc install -server=\${NPC_SERVER} -vkey=\${NPC_VKEY} -type=tcp && ./npc start
+  [[ ! \$PROCESS =~ npc && -e npc ]] && ./npc -server=\${NPC_SERVER} -vkey=\${NPC_VKEY} -type=tcp
 }
 
 check_run
