@@ -1,23 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nezha Control Panel</title>
+  <title>梭哈服务控制面板</title>
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { padding-top: 2rem; }
+    body { padding-top: 2rem; background-color: #f8f9fa; }
+    .card { margin-bottom: 1.5rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); }
+    .card-header { background-color: #f1f8ff; }
+    .status-indicator { width: 16px; height: 16px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+    .status-running { background-color: #28a745; }
+    .status-stopped { background-color: #dc3545; }
+    pre { background-color: #f7f7f9; padding: 1rem; border-radius: 0.25rem; overflow-x: auto; max-height: 400px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Nezha Agent Status</h1>
-    <div id="nezha-status">Loading...</div>
-    <div class="my-3">
-      <button id="start-btn" class="btn btn-primary">Start Nezha</button>
-      <button id="restart-btn" class="btn btn-warning">Restart Nezha</button>
-      <button id="stop-btn" class="btn btn-danger">Stop Nezha</button>
+    <h1 class="text-center mb-4">梭哈服务控制面板</h1>
+
+    <!-- 服务状态卡片 -->
+    <div class="card">
+      <div class="card-header">
+        <h5>服务状态</h5>
+      </div>
+      <div class="card-body">
+        <div id="service-status">
+          <div class="d-flex align-items-center mb-2">
+            <div class="status-indicator status-stopped" id="xray-status-indicator"></div>
+            <span>Xray 状态: </span>
+            <span id="xray-status" class="ms-2">检查中...</span>
+          </div>
+          <div class="d-flex align-items-center mb-2">
+            <div class="status-indicator status-stopped" id="argo-status-indicator"></div>
+            <span>Argo 状态: </span>
+            <span id="argo-status" class="ms-2">检查中...</span>
+          </div>
+          <div class="d-flex align-items-center">
+            <div class="status-indicator status-stopped" id="overall-status-indicator"></div>
+            <span>整体服务状态: </span>
+            <span id="overall-status" class="ms-2">检查中...</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="btn-group w-100">
+          <button id="start-btn" class="btn btn-success">启动服务</button>
+          <button id="restart-btn" class="btn btn-warning">重启服务</button>
+          <button id="stop-btn" class="btn btn-danger">停止服务</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 服务器信息卡片 -->
+    <div class="card">
+      <div class="card-header">
+        <h5>服务器信息</h5>
+      </div>
+      <div class="card-body">
+        <pre id="server-info">加载中...</pre>
+      </div>
+    </div>
+
+    <!-- V2Ray链接卡片 -->
+    <div class="card">
+      <div class="card-header">
+        <h5>V2Ray 链接</h5>
+      </div>
+      <div class="card-body">
+        <pre id="v2ray-info">加载中...</pre>
+      </div>
+      <div class="card-footer">
+        <button id="refresh-v2ray" class="btn btn-info w-100">刷新链接</button>
+      </div>
     </div>
   </div>
 
@@ -29,27 +85,162 @@
       const startBtn = document.getElementById("start-btn");
       const restartBtn = document.getElementById("restart-btn");
       const stopBtn = document.getElementById("stop-btn");
+      const refreshV2RayBtn = document.getElementById("refresh-v2ray");
 
-      startBtn.addEventListener("click", function() {
-        fetch('/start-nezha', { method: 'POST' })
+      // 定期更新服务状态
+      function updateServiceStatus() {
+        fetch('/suoha-status')
           .then(response => response.json())
-          .then(data => alert(data.message))
-          .catch(error => alert("启动失败: " + error));
+          .then(data => {
+            // 更新Xray状态
+            const xrayStatusIndicator = document.getElementById("xray-status-indicator");
+            const xrayStatus = document.getElementById("xray-status");
+            if(data.xrayRunning) {
+              xrayStatusIndicator.className = "status-indicator status-running";
+              xrayStatus.textContent = "正在运行";
+              xrayStatus.className = "ms-2 text-success";
+            } else {
+              xrayStatusIndicator.className = "status-indicator status-stopped";
+              xrayStatus.textContent = "已停止";
+              xrayStatus.className = "ms-2 text-danger";
+            }
+
+            // 更新Argo状态
+            const argoStatusIndicator = document.getElementById("argo-status-indicator");
+            const argoStatus = document.getElementById("argo-status");
+            if(data.argoRunning) {
+              argoStatusIndicator.className = "status-indicator status-running";
+              argoStatus.textContent = "正在运行";
+              argoStatus.className = "ms-2 text-success";
+            } else {
+              argoStatusIndicator.className = "status-indicator status-stopped";
+              argoStatus.textContent = "已停止";
+              argoStatus.className = "ms-2 text-danger";
+            }
+
+            // 更新整体状态
+            const overallStatusIndicator = document.getElementById("overall-status-indicator");
+            const overallStatus = document.getElementById("overall-status");
+            if(data.bothRunning) {
+              overallStatusIndicator.className = "status-indicator status-running";
+              overallStatus.textContent = "所有服务正常运行";
+              overallStatus.className = "ms-2 text-success";
+            } else {
+              overallStatusIndicator.className = "status-indicator status-stopped";
+              overallStatus.textContent = "部分服务未运行";
+              overallStatus.className = "ms-2 text-danger";
+            }
+          })
+          .catch(error => {
+            console.error("获取服务状态失败:", error);
+          });
+      }
+
+      // 获取服务器信息
+      function getServerInfo() {
+        fetch('/server-info')
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById("server-info").textContent = data.info;
+          })
+          .catch(error => {
+            console.error("获取服务器信息失败:", error);
+            document.getElementById("server-info").textContent = "获取信息失败: " + error;
+          });
+      }
+
+      // 获取V2Ray链接信息
+      function getV2RayInfo() {
+        fetch('/v2ray-info')
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById("v2ray-info").textContent = data.content;
+          })
+          .catch(error => {
+            console.error("获取V2Ray链接失败:", error);
+            document.getElementById("v2ray-info").textContent = "获取链接失败: " + error;
+          });
+      }
+
+      // 按钮事件处理
+      startBtn.addEventListener("click", function() {
+        this.disabled = true;
+        this.textContent = "启动中...";
+        
+        fetch('/start-suoha', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => {
+            alert(data.message);
+            updateServiceStatus();
+            getV2RayInfo();
+          })
+          .catch(error => {
+            alert("启动失败: " + error);
+          })
+          .finally(() => {
+            this.disabled = false;
+            this.textContent = "启动服务";
+          });
       });
 
       restartBtn.addEventListener("click", function() {
-        fetch('/restart-nezha', { method: 'POST' })
+        this.disabled = true;
+        this.textContent = "重启中...";
+        
+        fetch('/restart-suoha', { method: 'POST' })
           .then(response => response.json())
-          .then(data => alert(data.message))
-          .catch(error => alert("重启失败: " + error));
+          .then(data => {
+            alert(data.message);
+            updateServiceStatus();
+            getV2RayInfo();
+          })
+          .catch(error => {
+            alert("重启失败: " + error);
+          })
+          .finally(() => {
+            this.disabled = false;
+            this.textContent = "重启服务";
+          });
       });
 
       stopBtn.addEventListener("click", function() {
-        fetch('/stop-nezha', { method: 'POST' })
+        this.disabled = true;
+        this.textContent = "停止中...";
+        
+        fetch('/stop-suoha', { method: 'POST' })
           .then(response => response.json())
-          .then(data => alert(data.message))
-          .catch(error => alert("停止失败: " + error));
+          .then(data => {
+            alert(data.message);
+            updateServiceStatus();
+          })
+          .catch(error => {
+            alert("停止失败: " + error);
+          })
+          .finally(() => {
+            this.disabled = false;
+            this.textContent = "停止服务";
+          });
       });
+
+      refreshV2RayBtn.addEventListener("click", function() {
+        this.disabled = true;
+        this.textContent = "刷新中...";
+        
+        getV2RayInfo();
+        
+        setTimeout(() => {
+          this.disabled = false;
+          this.textContent = "刷新链接";
+        }, 1000);
+      });
+
+      // 初始化加载
+      updateServiceStatus();
+      getServerInfo();
+      getV2RayInfo();
+
+      // 定时更新状态
+      setInterval(updateServiceStatus, 10000);
     });
   </script>
 </body>
