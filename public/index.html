@@ -14,6 +14,8 @@
     .status-running { background-color: #28a745; }
     .status-stopped { background-color: #dc3545; }
     pre { background-color: #f7f7f9; padding: 1rem; border-radius: 0.25rem; overflow-x: auto; max-height: 400px; }
+    .error-message { color: #dc3545; margin-top: 0.5rem; }
+    .tab-content { padding-top: 1rem; }
   </style>
 </head>
 <body>
@@ -43,6 +45,8 @@
             <span id="overall-status" class="ms-2">检查中...</span>
           </div>
         </div>
+        <div id="operation-error" class="error-message mt-3" style="display: none;"></div>
+        <div id="operation-result" class="alert alert-info mt-3" style="display: none;"></div>
       </div>
       <div class="card-footer">
         <div class="btn-group w-100">
@@ -53,26 +57,68 @@
       </div>
     </div>
 
-    <!-- 服务器信息卡片 -->
+    <!-- 服务信息卡片 -->
     <div class="card">
       <div class="card-header">
-        <h5>服务器信息</h5>
+        <ul class="nav nav-tabs card-header-tabs" id="infoTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="v2ray-tab" data-bs-toggle="tab" data-bs-target="#v2ray-content" type="button" role="tab">V2Ray 链接</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="server-tab" data-bs-toggle="tab" data-bs-target="#server-content" type="button" role="tab">服务器信息</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs-content" type="button" role="tab">系统日志</button>
+          </li>
+        </ul>
       </div>
       <div class="card-body">
-        <pre id="server-info">加载中...</pre>
-      </div>
-    </div>
-
-    <!-- V2Ray链接卡片 -->
-    <div class="card">
-      <div class="card-header">
-        <h5>V2Ray 链接</h5>
-      </div>
-      <div class="card-body">
-        <pre id="v2ray-info">加载中...</pre>
-      </div>
-      <div class="card-footer">
-        <button id="refresh-v2ray" class="btn btn-info w-100">刷新链接</button>
+        <div class="tab-content" id="infoTabContent">
+          <!-- V2Ray链接内容 -->
+          <div class="tab-pane fade show active" id="v2ray-content" role="tabpanel">
+            <pre id="v2ray-info">加载中...</pre>
+            <button id="refresh-v2ray" class="btn btn-info w-100 mt-2">刷新链接</button>
+          </div>
+          
+          <!-- 服务器信息内容 -->
+          <div class="tab-pane fade" id="server-content" role="tabpanel">
+            <pre id="server-info">加载中...</pre>
+            <button id="refresh-server" class="btn btn-info w-100 mt-2">刷新服务器信息</button>
+          </div>
+          
+          <!-- 系统日志内容 -->
+          <div class="tab-pane fade" id="logs-content" role="tabpanel">
+            <ul class="nav nav-pills mb-3" id="logsSubTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="system-logs-tab" data-bs-toggle="pill" data-bs-target="#system-logs" type="button" role="tab">系统信息</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="process-logs-tab" data-bs-toggle="pill" data-bs-target="#process-logs" type="button" role="tab">进程信息</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="files-logs-tab" data-bs-toggle="pill" data-bs-target="#files-logs" type="button" role="tab">文件信息</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="argo-logs-tab" data-bs-toggle="pill" data-bs-target="#argo-logs" type="button" role="tab">Argo日志</button>
+              </li>
+            </ul>
+            <div class="tab-content" id="logsSubTabContent">
+              <div class="tab-pane fade show active" id="system-logs" role="tabpanel">
+                <pre id="system-logs-content">加载中...</pre>
+              </div>
+              <div class="tab-pane fade" id="process-logs" role="tabpanel">
+                <pre id="process-logs-content">加载中...</pre>
+              </div>
+              <div class="tab-pane fade" id="files-logs" role="tabpanel">
+                <pre id="files-logs-content">加载中...</pre>
+              </div>
+              <div class="tab-pane fade" id="argo-logs" role="tabpanel">
+                <pre id="argo-logs-content">加载中...</pre>
+              </div>
+            </div>
+            <button id="refresh-logs" class="btn btn-info w-100 mt-2">刷新日志</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -86,6 +132,28 @@
       const restartBtn = document.getElementById("restart-btn");
       const stopBtn = document.getElementById("stop-btn");
       const refreshV2RayBtn = document.getElementById("refresh-v2ray");
+      const refreshServerBtn = document.getElementById("refresh-server");
+      const refreshLogsBtn = document.getElementById("refresh-logs");
+      const operationError = document.getElementById("operation-error");
+      const operationResult = document.getElementById("operation-result");
+
+      // 显示错误信息
+      function showError(message) {
+        operationError.textContent = message;
+        operationError.style.display = "block";
+        setTimeout(() => {
+          operationError.style.display = "none";
+        }, 10000); // 10秒后自动隐藏
+      }
+
+      // 显示操作结果
+      function showResult(message) {
+        operationResult.textContent = message;
+        operationResult.style.display = "block";
+        setTimeout(() => {
+          operationResult.style.display = "none";
+        }, 10000); // 10秒后自动隐藏
+      }
 
       // 定期更新服务状态
       function updateServiceStatus() {
@@ -162,20 +230,43 @@
           });
       }
 
+      // 获取系统日志
+      function getLogs() {
+        fetch('/logs')
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById("system-logs-content").textContent = data.systemInfo;
+            document.getElementById("process-logs-content").textContent = data.processes;
+            document.getElementById("files-logs-content").textContent = data.fileStatus;
+            document.getElementById("argo-logs-content").textContent = data.argoLog;
+          })
+          .catch(error => {
+            console.error("获取日志失败:", error);
+            document.getElementById("system-logs-content").textContent = "获取日志失败: " + error;
+          });
+      }
+
       // 按钮事件处理
       startBtn.addEventListener("click", function() {
         this.disabled = true;
         this.textContent = "启动中...";
+        operationError.style.display = "none";
+        operationResult.style.display = "none";
         
         fetch('/start-suoha', { method: 'POST' })
           .then(response => response.json())
           .then(data => {
-            alert(data.message);
-            updateServiceStatus();
-            getV2RayInfo();
+            if (data.error) {
+              showError(`服务启动失败: ${data.error}\n\n${data.details || ''}`);
+            } else {
+              showResult(`服务启动成功: ${data.message}\n\n${data.details || ''}`);
+              updateServiceStatus();
+              getV2RayInfo();
+              getLogs(); // 更新日志
+            }
           })
           .catch(error => {
-            alert("启动失败: " + error);
+            showError("启动请求失败: " + error);
           })
           .finally(() => {
             this.disabled = false;
@@ -186,16 +277,23 @@
       restartBtn.addEventListener("click", function() {
         this.disabled = true;
         this.textContent = "重启中...";
+        operationError.style.display = "none";
+        operationResult.style.display = "none";
         
         fetch('/restart-suoha', { method: 'POST' })
           .then(response => response.json())
           .then(data => {
-            alert(data.message);
-            updateServiceStatus();
-            getV2RayInfo();
+            if (data.error) {
+              showError(`服务重启失败: ${data.error}\n\n${data.details || ''}`);
+            } else {
+              showResult(`服务重启成功: ${data.message}\n\n${data.details || ''}`);
+              updateServiceStatus();
+              getV2RayInfo();
+              getLogs(); // 更新日志
+            }
           })
           .catch(error => {
-            alert("重启失败: " + error);
+            showError("重启请求失败: " + error);
           })
           .finally(() => {
             this.disabled = false;
@@ -206,15 +304,22 @@
       stopBtn.addEventListener("click", function() {
         this.disabled = true;
         this.textContent = "停止中...";
+        operationError.style.display = "none";
+        operationResult.style.display = "none";
         
         fetch('/stop-suoha', { method: 'POST' })
           .then(response => response.json())
           .then(data => {
-            alert(data.message);
-            updateServiceStatus();
+            if (data.error) {
+              showError(`服务停止失败: ${data.error}`);
+            } else {
+              showResult(`服务停止成功: ${data.message}`);
+              updateServiceStatus();
+              getLogs(); // 更新日志
+            }
           })
           .catch(error => {
-            alert("停止失败: " + error);
+            showError("停止请求失败: " + error);
           })
           .finally(() => {
             this.disabled = false;
@@ -234,10 +339,35 @@
         }, 1000);
       });
 
+      refreshServerBtn.addEventListener("click", function() {
+        this.disabled = true;
+        this.textContent = "刷新中...";
+        
+        getServerInfo();
+        
+        setTimeout(() => {
+          this.disabled = false;
+          this.textContent = "刷新服务器信息";
+        }, 1000);
+      });
+
+      refreshLogsBtn.addEventListener("click", function() {
+        this.disabled = true;
+        this.textContent = "刷新中...";
+        
+        getLogs();
+        
+        setTimeout(() => {
+          this.disabled = false;
+          this.textContent = "刷新日志";
+        }, 1000);
+      });
+
       // 初始化加载
       updateServiceStatus();
       getServerInfo();
       getV2RayInfo();
+      getLogs();
 
       // 定时更新状态
       setInterval(updateServiceStatus, 10000);
