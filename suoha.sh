@@ -222,7 +222,6 @@ encoded_content=$(curl -s "$subscription_url")
 if [ -z "$encoded_content" ]; then
     echo "获取订阅内容失败，创建默认节点"
     echo "vless://$uuid@$argo:443?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#默认节点_TLS" >> v2ray.txt
-    echo "vless://$uuid@$argo:80?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#默认节点" >> v2ray.txt
 else
     # Base64解码
     decoded_content=$(echo "$encoded_content" | base64 -d)
@@ -231,7 +230,6 @@ else
     if [ ! -s all_nodes.tmp ]; then
         echo "解码订阅内容失败，创建默认节点"
         echo "vless://$uuid@$argo:443?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#默认节点_TLS" >> v2ray.txt
-        echo "vless://$uuid@$argo:80?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#默认节点" >> v2ray.txt
     else
         # 处理带TLS的节点
         grep -E '^vless://' all_nodes.tmp | while read -r line; do
@@ -257,32 +255,6 @@ else
             fi
         done
         
-        # 添加不带TLS的节点，同样只保留指定地区
-        grep -E '^vless://' all_nodes.tmp | while read -r line; do
-            # 提取URL编码的节点名称并进行URL解码
-            encoded_name=$(echo "$line" | awk -F'#' '{print $2}' | sed 's/_tls$//')
-            
-            # URL解码函数
-            urldecode() {
-                local url_encoded="${1//+/ }"
-                printf '%b' "${url_encoded//%/\\x}"
-            }
-            
-            # URL解码节点名称
-            node_name=$(urldecode "$encoded_name")
-            
-            # 检查节点名称是否包含指定地区
-            if echo "$node_name" | grep -qi -E '(日本|香港|新加坡|美国)'; then
-                # 提取IP和端口
-                ip_port=$(echo "$line" | awk -F'@' '{print $2}' | awk -F'?' '{print $1}')
-                # 替换端口为80
-                ip_port_no_tls=$(echo "$ip_port" | awk -F':' '{print $1}')":80"
-                # 生成新链接
-                new_line="vless://$uuid@$ip_port_no_tls?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#$encoded_name"
-                echo "$new_line" >> v2ray.txt
-            fi
-        done
-        
         rm -f all_nodes.tmp
     fi
 fi
@@ -291,7 +263,6 @@ fi
 if [ ! -s v2ray.txt ]; then
     echo "未找到符合条件的节点，添加默认节点"
     echo "vless://$uuid@$argo:443?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#默认节点_TLS" >> v2ray.txt
-    echo "vless://$uuid@$argo:80?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#默认节点" >> v2ray.txt
 fi
 
 echo "节点生成完成，以下是可用节点："
