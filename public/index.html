@@ -4,130 +4,214 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>梭哈服务控制面板</title>
-  <!-- Bootstrap 5 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { padding-top: 2rem; background-color: #f8f9fa; }
-    .card { margin-bottom: 1.5rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); }
-    .card-header { background-color: #f1f8ff; }
-    .status-indicator { width: 16px; height: 16px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-    .status-running { background-color: #28a745; }
-    .status-stopped { background-color: #dc3545; }
-    pre { background-color: #f7f7f9; padding: 1rem; border-radius: 0.25rem; overflow-x: auto; max-height: 400px; }
-    .error-message { color: #dc3545; margin-top: 0.5rem; }
-    .tab-content { padding-top: 1rem; }
-  </style>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- xterm.js 用于SSH终端 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#e6f1fe',
+              100: '#cce3fd',
+              200: '#99c7fb',
+              300: '#66aaf9',
+              400: '#338ef7',
+              500: '#0072f5', // 主色调
+              600: '#005bc4',
+              700: '#004493',
+              800: '#002e62',
+              900: '#001731',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body>
-  <div class="container">
-    <h1 class="text-center mb-4">梭哈服务控制面板</h1>
+<body class="bg-gray-50 text-gray-800">
+  <div class="container mx-auto px-4 py-8 max-w-6xl">
+    <h1 class="text-3xl font-bold text-center mb-8 text-primary-600">梭哈服务控制面板</h1>
 
-    <!-- 服务状态卡片 -->
-    <div class="card">
-      <div class="card-header">
-        <h5>服务状态</h5>
+    <!-- 主控制区域卡片 -->
+    <div class="bg-white rounded-xl shadow-sm mb-6 overflow-hidden border border-gray-100">
+      <div class="bg-primary-50 p-4 border-b border-gray-100">
+        <h2 class="text-lg font-semibold text-primary-700">服务状态</h2>
       </div>
-      <div class="card-body">
-        <div id="service-status">
-          <div class="d-flex align-items-center mb-2">
-            <div class="status-indicator status-stopped" id="xray-status-indicator"></div>
-            <span>Xray 状态: </span>
-            <span id="xray-status" class="ms-2">检查中...</span>
+      <div class="p-4">
+        <div id="service-status" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="flex items-center bg-white p-3 rounded-lg border border-gray-200">
+            <div id="xray-status-indicator" class="w-3 h-3 rounded-full bg-red-500 mr-3"></div>
+            <span class="text-sm font-medium">Xray 状态:</span>
+            <span id="xray-status" class="ml-2 text-sm">检查中...</span>
           </div>
-          <div class="d-flex align-items-center mb-2">
-            <div class="status-indicator status-stopped" id="argo-status-indicator"></div>
-            <span>Argo 状态: </span>
-            <span id="argo-status" class="ms-2">检查中...</span>
+          <div class="flex items-center bg-white p-3 rounded-lg border border-gray-200">
+            <div id="argo-status-indicator" class="w-3 h-3 rounded-full bg-red-500 mr-3"></div>
+            <span class="text-sm font-medium">Argo 状态:</span>
+            <span id="argo-status" class="ml-2 text-sm">检查中...</span>
           </div>
-          <div class="d-flex align-items-center">
-            <div class="status-indicator status-stopped" id="overall-status-indicator"></div>
-            <span>整体服务状态: </span>
-            <span id="overall-status" class="ms-2">检查中...</span>
+          <div class="flex items-center bg-white p-3 rounded-lg border border-gray-200">
+            <div id="overall-status-indicator" class="w-3 h-3 rounded-full bg-red-500 mr-3"></div>
+            <span class="text-sm font-medium">整体服务状态:</span>
+            <span id="overall-status" class="ml-2 text-sm">检查中...</span>
           </div>
         </div>
-        <div id="operation-error" class="error-message mt-3" style="display: none;"></div>
-        <div id="operation-result" class="alert alert-info mt-3" style="display: none;"></div>
+        
+        <div id="operation-error" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm"></div>
+        <div id="operation-result" class="hidden mt-4 p-3 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm"></div>
       </div>
-      <div class="card-footer">
-        <div class="btn-group w-100">
-          <button id="start-btn" class="btn btn-success">启动服务</button>
-          <button id="restart-btn" class="btn btn-warning">重启服务</button>
-          <button id="stop-btn" class="btn btn-danger">停止服务</button>
-        </div>
+      <div class="p-4 bg-gray-50 flex flex-wrap gap-2">
+        <button id="start-btn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50">
+          启动服务
+        </button>
+        <button id="restart-btn" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-50">
+          重启服务
+        </button>
+        <button id="stop-btn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-50">
+          停止服务
+        </button>
       </div>
     </div>
 
-    <!-- 服务信息卡片 -->
-    <div class="card">
-      <div class="card-header">
-        <ul class="nav nav-tabs card-header-tabs" id="infoTabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="v2ray-tab" data-bs-toggle="tab" data-bs-target="#v2ray-content" type="button" role="tab">V2Ray 链接</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="server-tab" data-bs-toggle="tab" data-bs-target="#server-content" type="button" role="tab">服务器信息</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs-content" type="button" role="tab">系统日志</button>
-          </li>
-        </ul>
+    <!-- 选项卡导航 -->
+    <div class="flex border-b border-gray-200 mb-6">
+      <button id="v2ray-tab-btn" class="px-4 py-2 text-primary-600 border-b-2 border-primary-500 font-medium">V2Ray 链接</button>
+      <button id="server-tab-btn" class="px-4 py-2 text-gray-500 hover:text-primary-600">服务器信息</button>
+      <button id="logs-tab-btn" class="px-4 py-2 text-gray-500 hover:text-primary-600">系统日志</button>
+      <button id="ssh-tab-btn" class="px-4 py-2 text-gray-500 hover:text-primary-600">SSH 终端</button>
+    </div>
+
+    <!-- 内容区域 -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+      <!-- V2Ray链接内容 -->
+      <div id="v2ray-content" class="tab-content block">
+        <pre id="v2ray-info" class="p-4 text-sm bg-gray-50 font-mono overflow-x-auto max-h-96">加载中...</pre>
+        <div class="p-4 bg-gray-50 border-t border-gray-100">
+          <button id="refresh-v2ray" class="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition focus:outline-none focus:ring-2 focus:ring-primary-400">
+            刷新链接
+          </button>
+        </div>
       </div>
-      <div class="card-body">
-        <div class="tab-content" id="infoTabContent">
-          <!-- V2Ray链接内容 -->
-          <div class="tab-pane fade show active" id="v2ray-content" role="tabpanel">
-            <pre id="v2ray-info">加载中...</pre>
-            <button id="refresh-v2ray" class="btn btn-info w-100 mt-2">刷新链接</button>
-          </div>
-          
-          <!-- 服务器信息内容 -->
-          <div class="tab-pane fade" id="server-content" role="tabpanel">
-            <pre id="server-info">加载中...</pre>
-            <button id="refresh-server" class="btn btn-info w-100 mt-2">刷新服务器信息</button>
-          </div>
-          
-          <!-- 系统日志内容 -->
-          <div class="tab-pane fade" id="logs-content" role="tabpanel">
-            <ul class="nav nav-pills mb-3" id="logsSubTabs" role="tablist">
-              <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="system-logs-tab" data-bs-toggle="pill" data-bs-target="#system-logs" type="button" role="tab">系统信息</button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button class="nav-link" id="process-logs-tab" data-bs-toggle="pill" data-bs-target="#process-logs" type="button" role="tab">进程信息</button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button class="nav-link" id="files-logs-tab" data-bs-toggle="pill" data-bs-target="#files-logs" type="button" role="tab">文件信息</button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button class="nav-link" id="argo-logs-tab" data-bs-toggle="pill" data-bs-target="#argo-logs" type="button" role="tab">Argo日志</button>
-              </li>
-            </ul>
-            <div class="tab-content" id="logsSubTabContent">
-              <div class="tab-pane fade show active" id="system-logs" role="tabpanel">
-                <pre id="system-logs-content">加载中...</pre>
-              </div>
-              <div class="tab-pane fade" id="process-logs" role="tabpanel">
-                <pre id="process-logs-content">加载中...</pre>
-              </div>
-              <div class="tab-pane fade" id="files-logs" role="tabpanel">
-                <pre id="files-logs-content">加载中...</pre>
-              </div>
-              <div class="tab-pane fade" id="argo-logs" role="tabpanel">
-                <pre id="argo-logs-content">加载中...</pre>
-              </div>
+      
+      <!-- 服务器信息内容 -->
+      <div id="server-content" class="tab-content hidden">
+        <pre id="server-info" class="p-4 text-sm bg-gray-50 font-mono overflow-x-auto max-h-96">加载中...</pre>
+        <div class="p-4 bg-gray-50 border-t border-gray-100">
+          <button id="refresh-server" class="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition focus:outline-none focus:ring-2 focus:ring-primary-400">
+            刷新服务器信息
+          </button>
+        </div>
+      </div>
+      
+      <!-- 系统日志内容 -->
+      <div id="logs-content" class="tab-content hidden">
+        <div class="flex flex-wrap border-b border-gray-200 bg-gray-50">
+          <button id="system-logs-tab" class="logs-subtab px-4 py-2 text-primary-600 border-b-2 border-primary-500 font-medium">系统信息</button>
+          <button id="process-logs-tab" class="logs-subtab px-4 py-2 text-gray-500 hover:text-primary-600">进程信息</button>
+          <button id="files-logs-tab" class="logs-subtab px-4 py-2 text-gray-500 hover:text-primary-600">文件信息</button>
+          <button id="argo-logs-tab" class="logs-subtab px-4 py-2 text-gray-500 hover:text-primary-600">Argo日志</button>
+        </div>
+        <div class="logs-subcontent block" id="system-logs">
+          <pre id="system-logs-content" class="p-4 text-sm bg-gray-50 font-mono overflow-x-auto max-h-96">加载中...</pre>
+        </div>
+        <div class="logs-subcontent hidden" id="process-logs">
+          <pre id="process-logs-content" class="p-4 text-sm bg-gray-50 font-mono overflow-x-auto max-h-96">加载中...</pre>
+        </div>
+        <div class="logs-subcontent hidden" id="files-logs">
+          <pre id="files-logs-content" class="p-4 text-sm bg-gray-50 font-mono overflow-x-auto max-h-96">加载中...</pre>
+        </div>
+        <div class="logs-subcontent hidden" id="argo-logs">
+          <pre id="argo-logs-content" class="p-4 text-sm bg-gray-50 font-mono overflow-x-auto max-h-96">加载中...</pre>
+        </div>
+        <div class="p-4 bg-gray-50 border-t border-gray-100">
+          <button id="refresh-logs" class="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition focus:outline-none focus:ring-2 focus:ring-primary-400">
+            刷新日志
+          </button>
+        </div>
+      </div>
+      
+      <!-- SSH终端内容 -->
+      <div id="ssh-content" class="tab-content hidden">
+        <div class="p-4 bg-gray-50">
+          <div id="terminal" class="min-h-[400px] bg-black rounded-lg overflow-hidden"></div>
+          <div class="mt-4">
+            <div class="flex gap-2">
+              <input id="ssh-command" type="text" class="flex-1 px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent" placeholder="输入命令...">
+              <button id="execute-command" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition focus:outline-none focus:ring-2 focus:ring-primary-400">
+                执行
+              </button>
             </div>
-            <button id="refresh-logs" class="btn btn-info w-100 mt-2">刷新日志</button>
+            <div class="mt-2 flex gap-2 flex-wrap">
+              <button class="quick-command px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded hover:bg-primary-200">ls -la</button>
+              <button class="quick-command px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded hover:bg-primary-200">ps -ef</button>
+              <button class="quick-command px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded hover:bg-primary-200">cat v2ray.txt</button>
+              <button class="quick-command px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded hover:bg-primary-200">df -h</button>
+              <button class="quick-command px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded hover:bg-primary-200">cat /etc/os-release</button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Bootstrap 5 JavaScript and Popper.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function() {
+      // Tab切换逻辑
+      const tabButtons = [
+        { btn: document.getElementById("v2ray-tab-btn"), content: document.getElementById("v2ray-content") },
+        { btn: document.getElementById("server-tab-btn"), content: document.getElementById("server-content") },
+        { btn: document.getElementById("logs-tab-btn"), content: document.getElementById("logs-content") },
+        { btn: document.getElementById("ssh-tab-btn"), content: document.getElementById("ssh-content") }
+      ];
+      
+      tabButtons.forEach(tab => {
+        tab.btn.addEventListener("click", () => {
+          // 重置所有tab按钮和内容
+          tabButtons.forEach(t => {
+            t.btn.classList.remove("text-primary-600", "border-b-2", "border-primary-500", "font-medium");
+            t.btn.classList.add("text-gray-500", "hover:text-primary-600");
+            t.content.classList.add("hidden");
+            t.content.classList.remove("block");
+          });
+          
+          // 激活当前tab
+          tab.btn.classList.remove("text-gray-500", "hover:text-primary-600");
+          tab.btn.classList.add("text-primary-600", "border-b-2", "border-primary-500", "font-medium");
+          tab.content.classList.remove("hidden");
+          tab.content.classList.add("block");
+        });
+      });
+      
+      // 日志子Tab切换逻辑
+      const logsSubTabs = [
+        { btn: document.getElementById("system-logs-tab"), content: document.getElementById("system-logs") },
+        { btn: document.getElementById("process-logs-tab"), content: document.getElementById("process-logs") },
+        { btn: document.getElementById("files-logs-tab"), content: document.getElementById("files-logs") },
+        { btn: document.getElementById("argo-logs-tab"), content: document.getElementById("argo-logs") }
+      ];
+      
+      logsSubTabs.forEach(tab => {
+        tab.btn.addEventListener("click", () => {
+          // 重置所有子tab按钮和内容
+          logsSubTabs.forEach(t => {
+            t.btn.classList.remove("text-primary-600", "border-b-2", "border-primary-500", "font-medium");
+            t.btn.classList.add("text-gray-500", "hover:text-primary-600");
+            t.content.classList.add("hidden");
+            t.content.classList.remove("block");
+          });
+          
+          // 激活当前子tab
+          tab.btn.classList.remove("text-gray-500", "hover:text-primary-600");
+          tab.btn.classList.add("text-primary-600", "border-b-2", "border-primary-500", "font-medium");
+          tab.content.classList.remove("hidden");
+          tab.content.classList.add("block");
+        });
+      });
+    
       const startBtn = document.getElementById("start-btn");
       const restartBtn = document.getElementById("restart-btn");
       const stopBtn = document.getElementById("stop-btn");
@@ -140,18 +224,18 @@
       // 显示错误信息
       function showError(message) {
         operationError.textContent = message;
-        operationError.style.display = "block";
+        operationError.classList.remove("hidden");
         setTimeout(() => {
-          operationError.style.display = "none";
+          operationError.classList.add("hidden");
         }, 10000); // 10秒后自动隐藏
       }
 
       // 显示操作结果
       function showResult(message) {
         operationResult.textContent = message;
-        operationResult.style.display = "block";
+        operationResult.classList.remove("hidden");
         setTimeout(() => {
-          operationResult.style.display = "none";
+          operationResult.classList.add("hidden");
         }, 10000); // 10秒后自动隐藏
       }
 
@@ -164,39 +248,51 @@
             const xrayStatusIndicator = document.getElementById("xray-status-indicator");
             const xrayStatus = document.getElementById("xray-status");
             if(data.xrayRunning) {
-              xrayStatusIndicator.className = "status-indicator status-running";
+              xrayStatusIndicator.classList.remove("bg-red-500");
+              xrayStatusIndicator.classList.add("bg-green-500");
               xrayStatus.textContent = "正在运行";
-              xrayStatus.className = "ms-2 text-success";
+              xrayStatus.classList.remove("text-red-600");
+              xrayStatus.classList.add("text-green-600");
             } else {
-              xrayStatusIndicator.className = "status-indicator status-stopped";
+              xrayStatusIndicator.classList.remove("bg-green-500");
+              xrayStatusIndicator.classList.add("bg-red-500");
               xrayStatus.textContent = "已停止";
-              xrayStatus.className = "ms-2 text-danger";
+              xrayStatus.classList.remove("text-green-600");
+              xrayStatus.classList.add("text-red-600");
             }
 
             // 更新Argo状态
             const argoStatusIndicator = document.getElementById("argo-status-indicator");
             const argoStatus = document.getElementById("argo-status");
             if(data.argoRunning) {
-              argoStatusIndicator.className = "status-indicator status-running";
+              argoStatusIndicator.classList.remove("bg-red-500");
+              argoStatusIndicator.classList.add("bg-green-500");
               argoStatus.textContent = "正在运行";
-              argoStatus.className = "ms-2 text-success";
+              argoStatus.classList.remove("text-red-600");
+              argoStatus.classList.add("text-green-600");
             } else {
-              argoStatusIndicator.className = "status-indicator status-stopped";
+              argoStatusIndicator.classList.remove("bg-green-500");
+              argoStatusIndicator.classList.add("bg-red-500");
               argoStatus.textContent = "已停止";
-              argoStatus.className = "ms-2 text-danger";
+              argoStatus.classList.remove("text-green-600");
+              argoStatus.classList.add("text-red-600");
             }
 
             // 更新整体状态
             const overallStatusIndicator = document.getElementById("overall-status-indicator");
             const overallStatus = document.getElementById("overall-status");
             if(data.bothRunning) {
-              overallStatusIndicator.className = "status-indicator status-running";
+              overallStatusIndicator.classList.remove("bg-red-500");
+              overallStatusIndicator.classList.add("bg-green-500");
               overallStatus.textContent = "所有服务正常运行";
-              overallStatus.className = "ms-2 text-success";
+              overallStatus.classList.remove("text-red-600");
+              overallStatus.classList.add("text-green-600");
             } else {
-              overallStatusIndicator.className = "status-indicator status-stopped";
+              overallStatusIndicator.classList.remove("bg-green-500");
+              overallStatusIndicator.classList.add("bg-red-500");
               overallStatus.textContent = "部分服务未运行";
-              overallStatus.className = "ms-2 text-danger";
+              overallStatus.classList.remove("text-green-600");
+              overallStatus.classList.add("text-red-600");
             }
           })
           .catch(error => {
@@ -250,8 +346,8 @@
       startBtn.addEventListener("click", function() {
         this.disabled = true;
         this.textContent = "启动中...";
-        operationError.style.display = "none";
-        operationResult.style.display = "none";
+        operationError.classList.add("hidden");
+        operationResult.classList.add("hidden");
         
         fetch('/start-suoha', { method: 'POST' })
           .then(response => response.json())
@@ -277,8 +373,8 @@
       restartBtn.addEventListener("click", function() {
         this.disabled = true;
         this.textContent = "重启中...";
-        operationError.style.display = "none";
-        operationResult.style.display = "none";
+        operationError.classList.add("hidden");
+        operationResult.classList.add("hidden");
         
         fetch('/restart-suoha', { method: 'POST' })
           .then(response => response.json())
@@ -304,8 +400,8 @@
       stopBtn.addEventListener("click", function() {
         this.disabled = true;
         this.textContent = "停止中...";
-        operationError.style.display = "none";
-        operationResult.style.display = "none";
+        operationError.classList.add("hidden");
+        operationResult.classList.add("hidden");
         
         fetch('/stop-suoha', { method: 'POST' })
           .then(response => response.json())
@@ -363,6 +459,80 @@
         }, 1000);
       });
 
+      // SSH终端功能
+      const term = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        lineHeight: 1.2,
+        theme: {
+          background: '#0F172A',
+          foreground: '#E2E8F0'
+        }
+      });
+      
+      const fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      
+      term.open(document.getElementById('terminal'));
+      fitAddon.fit();
+      term.writeln('SSH终端已准备就绪，使用下方输入框执行命令');
+      term.writeln('----------------------------------------------');
+      
+      // 窗口大小改变时调整终端大小
+      window.addEventListener('resize', () => {
+        fitAddon.fit();
+      });
+      
+      // 命令执行功能
+      document.getElementById('execute-command').addEventListener('click', executeCommand);
+      document.getElementById('ssh-command').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          executeCommand();
+        }
+      });
+      
+      // 快捷命令点击
+      document.querySelectorAll('.quick-command').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.getElementById('ssh-command').value = this.textContent;
+          executeCommand();
+        });
+      });
+      
+      function executeCommand() {
+        const commandInput = document.getElementById('ssh-command');
+        const command = commandInput.value.trim();
+        
+        if (!command) return;
+        
+        term.writeln(`> ${command}`);
+        
+        fetch('/execute-ssh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ command })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            term.writeln(`\x1b[31m错误: ${data.error}\x1b[0m`);
+          } else {
+            term.writeln(data.output || '命令执行成功，无输出');
+          }
+          term.writeln(''); // 空行
+        })
+        .catch(error => {
+          term.writeln(`\x1b[31m执行失败: ${error.message}\x1b[0m`);
+          term.writeln('');
+        });
+        
+        commandInput.value = '';
+      }
+
       // 初始化加载
       updateServiceStatus();
       getServerInfo();
@@ -371,6 +541,8 @@
 
       // 定时更新状态
       setInterval(updateServiceStatus, 10000);
+      // 定时更新日志，确保日志即使在服务运行时也能正常获取
+      setInterval(getLogs, 30000);
     });
   </script>
 </body>
