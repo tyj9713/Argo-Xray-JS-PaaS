@@ -73,13 +73,6 @@
         </ul>
       </div>
       <div class="card-body">
-        <div class="tab-content" id="infoTabContent">
-          <!-- V2Ray链接内容 -->
-          <div class="tab-pane fade show active" id="v2ray-content" role="tabpanel">
-            <pre id="v2ray-info">加载中...</pre>
-            <button id="refresh-v2ray" class="btn btn-info w-100 mt-2">刷新链接</button>
-          </div>
-          
           <!-- 服务器信息内容 -->
           <div class="tab-pane fade" id="server-content" role="tabpanel">
             <pre id="server-info">加载中...</pre>
@@ -216,20 +209,6 @@
             document.getElementById("server-info").textContent = "获取信息失败: " + error;
           });
       }
-
-      // 获取V2Ray链接信息
-      function getV2RayInfo() {
-        fetch('/v2ray-info')
-          .then(response => response.json())
-          .then(data => {
-            document.getElementById("v2ray-info").textContent = data.content;
-          })
-          .catch(error => {
-            console.error("获取V2Ray链接失败:", error);
-            document.getElementById("v2ray-info").textContent = "获取链接失败: " + error;
-          });
-      }
-
       // 获取系统日志
       function getLogs() {
         fetch('/logs')
