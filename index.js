@@ -40,6 +40,22 @@ app.get('/server-info', (req, res) => {
     }
   });
 });
+// 
+// 直接获取v2ray.txt订阅内容
+app.get('/sub', (req, res) => {
+  if (fs.existsSync('./v2ray.txt')) {
+    fs.readFile('./v2ray.txt', 'utf8', (err, data) => {
+      if (err) {
+        res.status(500).send("Error reading subscription file");
+      } else {
+        res.set('Content-Type', 'text/plain');
+        res.send(data);
+      }
+    });
+  } else {
+    res.status(404).send("Subscription file not found. Please start the service first.");
+  }
+});
 
 // 获取v2ray链接信息
 app.get('/v2ray-info', (req, res) => {
