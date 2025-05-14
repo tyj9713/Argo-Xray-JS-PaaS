@@ -41,18 +41,18 @@ app.get('/server-info', (req, res) => {
   });
 });
 
-
+// 获取v2ray链接信息
 app.get('/v2ray-info', (req, res) => {
   if (fs.existsSync('./v2ray.txt')) {
     fs.readFile('./v2ray.txt', 'utf8', (err, data) => {
       if (err) {
-        res.status(500).send("读取v2ray.txt失败");
+        res.status(500).json({ error: "读取v2ray.txt失败" });
       } else {
-        res.type('text/plain').send(data);
+        res.json({ content: data });
       }
     });
   } else {
-    res.status(404).send("未找到v2ray.txt，请先启动服务");
+    res.json({ content: "未找到v2ray.txt，请先启动服务" });
   }
 });
 
@@ -145,29 +145,118 @@ app.post('/stop-suoha', (req, res) => {
   }
 });
 
-// 获取日志
+// 获取日志 - 修复服务启动后无法读取日志的问题
 app.get('/logs', (req, res) => {
   try {
-    // 检查系统和进程信息
-    const sysInfo = execSync("uname -a && df -h && ls -la").toString();
-    const processInfo = execSync("ps -ef | grep -E 'xray|cloudflared|suoha' || true").toString();
-    const fileCheck = execSync("ls -la suoha.sh v2ray.txt 2>&1 || true").toString();
+    let sysInfo, processInfo, fileCheck, argoLog;
     
-    // 提取argo日志，如果存在的话
-    let argoLog = "argo.log不存在";
-    if (fs.existsSync('./argo.log')) {
-      argoLog = fs.readFileSync('./argo.log', 'utf8');
-    }
+    // 使用Promise.all同时执行多个异步命令
+    const promises = [
+      // 系统信息
+      new Promise((resolve, reject) => {
+        exec("uname -a && df -h && ls -la", (error, stdout, stderr) => {
+          if (error) {
+            resolve("获取系统信息失败: " + error.message);
+          } else {
+            resolve(stdout);
+          }
+        });
+      }),
+      
+      // 进程信息
+      new Promise((resolve, reject) => {
+        exec("ps -ef | grep -E 'xray|cloudflared|suoha' | grep -v grep || echo '没有找到相关进程'", (error, stdout, stderr) => {
+          if (error) {
+            resolve("获取进程信息失败: " + error.message);
+          } else {
+            resolve(stdout);
+          }
+        });
+      }),
+      
+      // 文件信息
+      new Promise((resolve, reject) => {
+        exec("ls -la suoha.sh v2ray.txt 2>&1 || echo '文件不存在'", (error, stdout, stderr) => {
+          if (error) {
+            resolve("获取文件信息失败: " + error.message);
+          } else {
+            resolve(stdout);
+          }
+        });
+      }),
+      
+      // Argo日志
+      new Promise((resolve, reject) => {
+        if (fs.existsSync('./argo.log')) {
+          fs.readFile('./argo.log', 'utf8', (err, data) => {
+            if (err) {
+              resolve("读取argo.log失败: " + err.message);
+            } else {
+              resolve(data);
+            }
+          });
+        } else {
+          resolve("argo.log不存在");
+        }
+      })
+    ];
     
-    res.json({
-      systemInfo: sysInfo,
-      processes: processInfo,
-      fileStatus: fileCheck,
-      argoLog: argoLog
-    });
+    Promise.all(promises)
+      .then(results => {
+        res.json({
+          systemInfo: results[0],
+          processes: results[1],
+          fileStatus: results[2],
+          argoLog: results[3]
+        });
+      })
+      .catch(error => {
+        res.status(500).json({ error: "获取日志信息失败", message: error.message });
+      });
   } catch (error) {
     res.status(500).json({ error: "获取日志信息失败", message: error.message });
   }
+});
+
+// SSH命令执行API
+app.post('/execute-ssh', (req, res) => {
+  const { command } = req.body;
+  
+  if (!command) {
+    return res.status(400).json({ error: "缺少命令参数" });
+  }
+  
+  // 安全检查：禁止执行一些危险命令
+  const forbiddenCommands = [
+    /rm\s+-rf\s+\//, // 删除根目录
+    /mkfs/, // 格式化文件系统
+    /dd\s+if/, // 磁盘操作
+    /shutdown/, // 关机
+    /reboot/, // 重启
+    /init\s+0/, // 关机
+    /passwd/, // 修改密码
+    /chmod\s+777\s+\//, // 修改根目录权限
+    />\s+\/dev\/sd/ // 覆写磁盘
+  ];
+  
+  for (const pattern of forbiddenCommands) {
+    if (pattern.test(command)) {
+      return res.status(403).json({ error: "出于安全考虑，禁止执行此命令" });
+    }
+  }
+  
+  console.log("执行SSH命令:", command);
+  
+  // 使用exec执行命令，设置超时时间为10秒
+  exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
+    if (error) {
+      console.error("命令执行失败:", error);
+      return res.json({ error: error.message, output: stderr });
+    }
+    
+    console.log("命令执行成功");
+    res.json({ output: stdout || stderr || "命令执行成功，无输出" });
+  });
 });
 
 // 哪吒相关控制（保留原有代码，但默认不启用）
