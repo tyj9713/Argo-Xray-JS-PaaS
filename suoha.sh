@@ -40,7 +40,7 @@ fi
 
 function quicktunnel(){
 # 检查文件是否已经存在，如不存在则下载
-if [ ! -d "xray" ] || [ ! -f "cloudflared-linux" ]; then
+if [ ! -d "xray" ] || [ ! -f "cloudflared-linux" ] || [ ! -x "xray/xray" ] || [ ! -x "cloudflared-linux" ]; then
     rm -rf xray cloudflared-linux xray.zip
     case "$(uname -m)" in
         x86_64 | x64 | amd64 )
@@ -145,96 +145,179 @@ cat>xray/config.json<<EOF
 }
 EOF
 fi
+
+# 确保xray正常运行
 ./xray/xray run>/dev/null 2>&1 &
+xray_pid=$!
+sleep 2
+if ! ps -p $xray_pid > /dev/null; then
+    echo "Xray启动失败，请检查配置"
+    exit 1
+fi
+
+# 启动cloudflared并设置超时机制
 ./cloudflared-linux tunnel --url http://localhost:$port --no-autoupdate --edge-ip-version $ips --protocol http2 >argo.log 2>&1 &
+cloudflared_pid=$!
 sleep 1
+
 n=0
+max_retries=3
+retry_count=0
 while true
 do
-n=$[$n+1]
-echo 等待cloudflare argo生成地址 已等待 $n 秒
-argo=$(cat argo.log | grep trycloudflare.com | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}')
-if [ $n == 15 ]
-then
-	n=0
-	if [ $(grep -i PRETTY_NAME /etc/os-release | cut -d \" -f2 | awk '{print $1}') == "Alpine" ]
-	then
-		kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $1}') >/dev/null 2>&1
-	else
-		kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $2}') >/dev/null 2>&1
-	fi
-	rm -rf argo.log
-	echo argo获取超时,重试中
-	./cloudflared-linux tunnel --url http://localhost:$port --no-autoupdate --edge-ip-version $ips --protocol http2 >argo.log 2>&1 &
-	sleep 1
-elif [ -z "$argo" ]
-then
-	sleep 1
-else
-	rm -rf argo.log
-	break
-fi
+    n=$[$n+1]
+    echo 等待cloudflare argo生成地址 已等待 $n 秒
+    
+    if ! ps -p $cloudflared_pid > /dev/null; then
+        echo "Cloudflared进程已退出，重新启动"
+        ./cloudflared-linux tunnel --url http://localhost:$port --no-autoupdate --edge-ip-version $ips --protocol http2 >argo.log 2>&1 &
+        cloudflared_pid=$!
+        sleep 1
+    fi
+    
+    argo=$(cat argo.log 2>/dev/null | grep trycloudflare.com | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}')
+    
+    if [ $n -ge 15 ]; then
+        n=0
+        retry_count=$[$retry_count+1]
+        
+        if [ $retry_count -ge $max_retries ]; then
+            echo "多次尝试后无法获取argo地址，退出"
+            kill -9 $xray_pid $cloudflared_pid >/dev/null 2>&1
+            exit 1
+        fi
+        
+        echo "argo获取超时，第$retry_count次重试中"
+        
+        if [ $(grep -i PRETTY_NAME /etc/os-release | cut -d \" -f2 | awk '{print $1}') == "Alpine" ]; then
+            kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $1}') >/dev/null 2>&1
+        else
+            kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $2}') >/dev/null 2>&1
+        fi
+        
+        rm -rf argo.log
+        ./cloudflared-linux tunnel --url http://localhost:$port --no-autoupdate --edge-ip-version $ips --protocol http2 >argo.log 2>&1 &
+        cloudflared_pid=$!
+        sleep 1
+    elif [ -z "$argo" ]; then
+        sleep 1
+    else
+        # 成功获取argo地址
+        rm -rf argo.log
+        break
+    fi
 done
-clear
+
+# 确保没有旧的v2ray.txt
+rm -f v2ray.txt
+touch v2ray.txt
+
 # 从订阅链接获取节点信息并生成v2ray.txt
 subscription_url="https://owo.o00o.ooo/sub?uuid=$uuid&encryption=none&security=tls&type=ws&host=$argo&path=$urlpath"
-rm -f v2ray.txt
 
-# 只保留包含日本、香港、新加坡、美国的节点
-curl -s "$subscription_url" | base64 -d | grep -E '^vless://' | while read -r line; do
-    # 提取节点名称
-    node_name=$(echo "$line" | awk -F'#' '{print $2}')
+echo "正在生成订阅节点..."
+
+# 下载并解码订阅内容
+encoded_content=$(curl -s "$subscription_url")
+if [ -z "$encoded_content" ]; then
+    echo "获取订阅内容失败，创建默认节点"
+    echo "vless://$uuid@$argo:443?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#默认节点_TLS" >> v2ray.txt
+    echo "vless://$uuid@$argo:80?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#默认节点" >> v2ray.txt
+else
+    # Base64解码
+    decoded_content=$(echo "$encoded_content" | base64 -d)
+    echo "$decoded_content" > all_nodes.tmp
     
-    # 检查节点名称是否包含指定地区
-    if echo "$node_name" | grep -qi -E '(日本|香港|新加坡|美国)'; then
-        # 提取IP和端口
-        ip_port=$(echo "$line" | awk -F'@' '{print $2}' | awk -F'?' '{print $1}')
-        # 生成新链接
-        new_line="vless://$uuid@$ip_port?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#$node_name"
-        echo "$new_line" >> v2ray.txt
+    if [ ! -s all_nodes.tmp ]; then
+        echo "解码订阅内容失败，创建默认节点"
+        echo "vless://$uuid@$argo:443?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#默认节点_TLS" >> v2ray.txt
+        echo "vless://$uuid@$argo:80?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#默认节点" >> v2ray.txt
+    else
+        # 处理带TLS的节点
+        grep -E '^vless://' all_nodes.tmp | while read -r line; do
+            # 提取URL编码的节点名称并进行URL解码
+            encoded_name=$(echo "$line" | awk -F'#' '{print $2}')
+            
+            # URL解码函数
+            urldecode() {
+                local url_encoded="${1//+/ }"
+                printf '%b' "${url_encoded//%/\\x}"
+            }
+            
+            # URL解码节点名称
+            node_name=$(urldecode "$encoded_name")
+            
+            # 检查节点名称是否包含指定地区
+            if echo "$node_name" | grep -qi -E '(日本|香港|新加坡|美国)'; then
+                # 提取IP和端口
+                ip_port=$(echo "$line" | awk -F'@' '{print $2}' | awk -F'?' '{print $1}')
+                # 生成新链接
+                new_line="vless://$uuid@$ip_port?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#$encoded_name"
+                echo "$new_line" >> v2ray.txt
+            fi
+        done
+        
+        # 添加不带TLS的节点，同样只保留指定地区
+        grep -E '^vless://' all_nodes.tmp | while read -r line; do
+            # 提取URL编码的节点名称并进行URL解码
+            encoded_name=$(echo "$line" | awk -F'#' '{print $2}' | sed 's/_tls$//')
+            
+            # URL解码函数
+            urldecode() {
+                local url_encoded="${1//+/ }"
+                printf '%b' "${url_encoded//%/\\x}"
+            }
+            
+            # URL解码节点名称
+            node_name=$(urldecode "$encoded_name")
+            
+            # 检查节点名称是否包含指定地区
+            if echo "$node_name" | grep -qi -E '(日本|香港|新加坡|美国)'; then
+                # 提取IP和端口
+                ip_port=$(echo "$line" | awk -F'@' '{print $2}' | awk -F'?' '{print $1}')
+                # 替换端口为80
+                ip_port_no_tls=$(echo "$ip_port" | awk -F':' '{print $1}')":80"
+                # 生成新链接
+                new_line="vless://$uuid@$ip_port_no_tls?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#$encoded_name"
+                echo "$new_line" >> v2ray.txt
+            fi
+        done
+        
+        rm -f all_nodes.tmp
     fi
-done
+fi
 
-# 添加不带TLS的节点，同样只保留指定地区
-curl -s "$subscription_url" | base64 -d | grep -E '^vless://' | while read -r line; do
-    # 提取节点名称
-    node_name=$(echo "$line" | awk -F'#' '{print $2}' | sed 's/_tls$//')
-    
-    # 检查节点名称是否包含指定地区
-    if echo "$node_name" | grep -qi -E '(日本|香港|新加坡|美国)'; then
-        # 提取IP和端口
-        ip_port=$(echo "$line" | awk -F'@' '{print $2}' | awk -F'?' '{print $1}')
-        # 替换端口为80
-        ip_port_no_tls=$(echo "$ip_port" | awk -F':' '{print $1}')":80"
-        # 生成新链接
-        new_line="vless://$uuid@$ip_port_no_tls?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#$node_name"
-        echo "$new_line" >> v2ray.txt
-    fi
-done
+# 如果没有找到符合条件的节点，添加默认节点
+if [ ! -s v2ray.txt ]; then
+    echo "未找到符合条件的节点，添加默认节点"
+    echo "vless://$uuid@$argo:443?encryption=none&security=tls&type=ws&host=$argo&path=/$urlpath#默认节点_TLS" >> v2ray.txt
+    echo "vless://$uuid@$argo:80?encryption=none&security=none&type=ws&host=$argo&path=/$urlpath#默认节点" >> v2ray.txt
+fi
 
+echo "节点生成完成，以下是可用节点："
 cat v2ray.txt
 }
 
 # 设置默认参数
-	mode=1
-		protocol=2
-		ips=4
+mode=1
+protocol=2
+ips=4
 
 # 清理历史进程
-	if [ $(grep -i PRETTY_NAME /etc/os-release | cut -d \" -f2 | awk '{print $1}') == "Alpine" ]
-	then
-		kill -9 $(ps -ef | grep xray | grep -v grep | awk '{print $1}') >/dev/null 2>&1
-		kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $1}') >/dev/null 2>&1
-	else
-		kill -9 $(ps -ef | grep xray | grep -v grep | awk '{print $2}') >/dev/null 2>&1
-		kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $2}') >/dev/null 2>&1
-	fi
+if [ $(grep -i PRETTY_NAME /etc/os-release | cut -d \" -f2 | awk '{print $1}') == "Alpine" ]
+then
+    kill -9 $(ps -ef | grep xray | grep -v grep | awk '{print $1}') >/dev/null 2>&1
+    kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $1}') >/dev/null 2>&1
+else
+    kill -9 $(ps -ef | grep xray | grep -v grep | awk '{print $2}') >/dev/null 2>&1
+    kill -9 $(ps -ef | grep cloudflared-linux | grep -v grep | awk '{print $2}') >/dev/null 2>&1
+fi
 
 # 清理历史文件
-	rm -rf v2ray.txt
+rm -rf v2ray.txt
 
 # 获取ISP信息
 isp=$(curl -$ips -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18"-"$30}' | sed -e 's/ /_/g')
 
 # 执行梭哈模式
-	quicktunnel
+quicktunnel
