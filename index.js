@@ -42,6 +42,21 @@ app.get('/server-info', (req, res) => {
 });
 
 // 获取v2ray链接信息
+app.get('/xxxooo', (req, res) => {
+  if (fs.existsSync('./v2ray.txt')) {
+    fs.readFile('./v2ray.txt', 'utf8', (err, data) => {
+      if (err) {
+        res.status(500).send("读取v2ray.txt失败");
+      } else {
+        res.send(data);
+      }
+    });
+  } else {
+    res.send("未找到v2ray.txt，请先启动服务");
+  }
+});
+
+// 获取v2ray链接信息
 app.get('/v2ray-info', (req, res) => {
   if (fs.existsSync('./v2ray.txt')) {
     fs.readFile('./v2ray.txt', 'utf8', (err, data) => {
